@@ -10,7 +10,7 @@ def fetch_content_info(url):
         response = requests.get(url, timeout=10)
         response.raise_for_status()  # Raise an exception for non-2xx status codes
 
-        content_type = response.headers.get("content-type", "Unknown").lower()
+        content_type = response.headers.get("content-type", "").lower()
         content_length = response.headers.get("content-length")
 
         if content_length is None:
@@ -42,8 +42,6 @@ def main(msg):
             # Only append content length if it's a valid integer
             if content_length and content_length.isdigit():
                 output.append(size(int(content_length)))
-            elif content_length == "Not provided":
-                output.append(content_length)
 
     if output:
         return " ".join(output).encode("utf-8", "replace")
