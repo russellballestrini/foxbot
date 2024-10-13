@@ -1,129 +1,170 @@
-from twisted.words.protocols import irc
-from twisted.internet import protocol, reactor
+import socket
+import sys
+import importlib
+import os
 from datetime import datetime as DT
-# http://twistedmatrix.com/documents/current/core/howto/clients.html
 
-# timeout handling mixin.
-from twisted.protocols.policies import TimeoutMixin
+PLUGINDIR = "plugins"
 
-PLUGINDIR = 'plugins'
 
-def dyn_import( plugin_name, plugin_dir=PLUGINDIR ):
-    """import and reload plugin modules by name"""
-    import sys
-    module = "%s.%s" % ( plugin_dir, plugin_name )
-    try:
-        reload( sys.modules[ module ] )
-    except KeyError:
+class PluginManager:
+    def __init__(self, plugin_dir=PLUGINDIR):
+        self.plugin_dir = plugin_dir
+        self.plugins = {}
+
+    def load_plugins(self):
+        """Scan plugin directory and load all plugins."""
+        loggit("Loading plugins...")
+        for filename in os.listdir(self.plugin_dir):
+            if filename.endswith(".py") and filename != "__init__.py":
+                plugin_name = filename[:-3]
+                self.load_plugin(plugin_name)
+
+    def load_plugin(self, plugin_name):
+        """Load a specific plugin by name."""
+        module = f"{self.plugin_dir}.{plugin_name}"
         try:
-             __import__( module )
-        except ImportError:
-            return False
-    return sys.modules[ module ]
+            if module in sys.modules:
+                loggit(f"Reloading plugin: {module}")
+                importlib.reload(sys.modules[module])
+            else:
+                loggit(f"Loading plugin: {module}")
+                __import__(module)
+            self.plugins[plugin_name] = sys.modules[module]
+        except Exception as e:
+            loggit(f"Failed to load plugin {plugin_name}: {e}")
 
-def loggit( *messages ):
+    def run_plugin(self, plugin_name, msg):
+        """Run the main function of a plugin if available."""
+        if plugin_name in self.plugins:
+            plugin = self.plugins[plugin_name]
+            if hasattr(plugin, "main"):
+                try:
+                    result = plugin.main(msg)
+                    return result
+                except Exception as e:
+                    loggit(f"Error running plugin {plugin_name}: {e}")
+        else:
+            loggit(f"Plugin {plugin_name} not loaded.")
+        return None
+
+
+def loggit(*messages):
     """Handle Logging to standard out."""
-    NOW = DT.now().strftime( "%Y-%m-%d %H:%M:%S " )
-    output = NOW + ' '.join( map( str, messages ) )
+    NOW = DT.now().strftime("%Y-%m-%d %H:%M:%S ")
+    output = NOW + " ".join(map(str, messages))
     print(output)
 
 
-class Foxbot(irc.IRCClient, TimeoutMixin):
-
-    def run_plugin( self, plugin, user='', channel='', msg='' ):
-        """Accept a plugin string name, load and run"""
-        mod = dyn_import( plugin ) # attempt to load module by name
-        if mod:
-            result = mod.main( msg )
-            if result: # speak the string result
-                if channel:
-                    self.msg( channel, result ) 
-                return True
-        return False
-
-    def _get_nickname( self ):
-        return self.factory.nickname
-
-    nickname = property(_get_nickname)
-
-    def signedOn(self):
-        self.join( self.factory.channel, self.factory.key )
-        loggit( "Signed on as %s." % (self.nickname) )
-
-    def joined(self, channel):
-        loggit( "Joined %s." % (channel) )
-
-    def privmsg(self, user, channel, msg):
-        loggit( user, msg )
-        if '://' in msg:
-            loggit( "URI detected!" )
-            self.run_plugin( 'urinfo', user, channel, msg )
-
-    def action(self, user, channel, msg ):
-        """Called when the bot sees a user do an action"""
-        loggit( user, msg )
-        plugin = msg.split()[0] # use first word as plugin name
-        self.run_plugin( plugin, user, channel, msg ) # try to run
-
-    def kickedFrom(self, channel, kicker, message):
-        """Called when kicked from channel"""
-        loggit( "Kicked by %s: %s" % ( kicker, message ) )
-        self.join( self.factory.channel, self.factory.key )
-
-    def modeChanged(self, user, channel, set, modes, args):
-        loggit( "mode changed:", user, channel, set, modes, args)
-        if set and 'k' in modes:
-            self.factory.key = args
-        elif not set and 'k' in modes:
-            self.factory.key = None
-
-
-class FoxbotFactory( protocol.ClientFactory ):
-    protocol = Foxbot
-
-    def __init__(self, channel, nickname='foxbot', password=None, key=None):
-        self.key = key
+class Foxbot:
+    def __init__(
+        self, server, port, channel, nickname, plugin_manager, password=None, key=None
+    ):
+        self.server = server
+        self.port = port
         self.channel = channel
         self.nickname = nickname
         self.password = password
+        self.key = key
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.plugin_manager = plugin_manager
 
-    def clientConnectionLost(self, connector, reason):
-        loggit( "Lost connection (%s), reconnecting." % (reason) )
-        connector.connect()
+    def connect(self):
+        """Connect to the IRC server and join the channel."""
+        loggit(f"Connecting to {self.server}:{self.port}")
+        self.sock.connect((self.server, self.port))
+        self.send(f"NICK {self.nickname}")
+        self.send(f"USER {self.nickname} 0 * :{self.nickname}")
+        if self.password:
+            self.send(f"PASS {self.password}")
+        self.join_channel(self.channel)
 
-    def clientConnectionFailed(self, connector, reason):
-        loggit( "Could not connect: %s" % (reason) )
+    def join_channel(self, channel):
+        """Join the specified IRC channel."""
+        self.send(f"JOIN {channel}")
+        loggit(f"Joined {channel}")
 
-    # from twisted.protocols.policies import TimeoutMixin.
-    def timeoutConnection(self):
-        self.transport.abortConnection()
+    def send(self, message):
+        """Send a message to the IRC server."""
+        loggit(f">> {message}")
+        self.sock.send((message + "\r\n").encode())
 
+    def receive(self):
+        """Receive messages from the IRC server."""
+        buffer = ""
+        while True:
+            data = self.sock.recv(4096).decode()
+            buffer += data
+            lines = buffer.split("\r\n")
+            buffer = lines.pop()
+            for line in lines:
+                loggit(f"<< {line}")
+                self.handle_message(line)
 
-def main():
-    from optparse import OptionParser
-    p = OptionParser()
-    p.add_option('-s', '--server', dest='server')
-    p.add_option('-p', '--port', dest='port', default=6667)
-    p.add_option('-c', '--channel', dest='channel')
-    p.add_option('-k', '--key', dest='key')
-    p.add_option('-n', '--nick', dest='nick', default='foxbot')
-    p.add_option('-P', '--password', dest='password', default=None)
-    p.add_option('-q', '--quiet', dest='quiet', default=False,
-        action='store_true'
-    )
-    o, args = p.parse_args()
+    def handle_message(self, message):
+        """Process a message from the server."""
+        if message.startswith("PING"):
+            # Respond to server PINGs to keep the connection alive
+            self.send(f"PONG {message.split()[1]}")
+        else:
+            parts = message.split(" ")
+            if len(parts) > 3 and parts[1] == "PRIVMSG":
+                user = parts[0][1:].split("!")[0]
+                channel = parts[2]
+                msg = " ".join(parts[3:])[1:]
 
-    if o.server and o.channel:
+                # Check if it's an ACTION ("/me")
+                if msg.startswith("\x01ACTION") and msg.endswith("\x01"):
+                    action_msg = msg[8:-1].strip()  # Extract the action message
+                    loggit(f"Action from {user}: {action_msg}")
+                    plugin_name = action_msg.split()[0]
+                    result = self.plugin_manager.run_plugin(plugin_name, action_msg)
+                else:
+                    loggit(f"Message from {user}: {msg}")
 
-        reactor.connectTCP(
-          o.server, 
-          int(o.port), 
-          FoxbotFactory( o.channel, o.nick, o.password, o.key )
-        )
-        reactor.run()
+                    # Detect URLs and run the urinfo plugin if a URL is found
+                    if "://" in msg:
+                        loggit(f"URI detected: {msg}")
+                        # Extract the first URL from the message
+                        url = msg.split()[
+                            0
+                        ]  # Modify this to get the URL correctly if needed
+                        result = self.plugin_manager.run_plugin("urinfo", url)
+                    else:
+                        plugin_name = msg.split()[0]
+                        result = self.plugin_manager.run_plugin(plugin_name, msg)
 
-    else:
-        print("Provide server and channel (foxbot --help)")
+                if result:
+                    self.send(f"PRIVMSG {channel} :{result}")
+
+    def run(self):
+        """Start the bot."""
+        try:
+            self.connect()
+            self.receive()
+        except KeyboardInterrupt:
+            loggit("Disconnecting...")
+            self.sock.close()
+            sys.exit(0)
+
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="A simple IRC bot.")
+    parser.add_argument("--server", required=True, help="IRC server to connect to")
+    parser.add_argument(
+        "--port", type=int, default=6667, help="Port to connect to (default 6667)"
+    )
+    parser.add_argument("--channel", required=True, help="Channel to join")
+    parser.add_argument("--nick", default="foxbot", help="Bot nickname")
+    parser.add_argument("--password", help="Optional password for server or channel")
+    args = parser.parse_args()
+
+    plugin_manager = PluginManager()
+    plugin_manager.load_plugins()
+
+    bot = Foxbot(
+        args.server, args.port, args.channel, args.nick, plugin_manager, args.password
+    )
+    bot.run()

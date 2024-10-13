@@ -20,15 +20,19 @@ Don't count on it
 My reply is no
 My sources say no
 Outlook not so good
-Very doubtful""".split('\n')
+Very doubtful""".split(
+    "\n"
+)
+
 
 def eightball():
-    return choice( phrases )
+    return choice(phrases)
 
-def main( data ):
-    if '8' in data and 'ball' in data:
+
+def main(data):
+    if "8" in data and "ball" in data:
         return eightball()
 
-if __name__ == '__main__':
-    print eightball()
 
+if __name__ == "__main__":
+    print(eightball())
