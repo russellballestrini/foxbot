@@ -53,7 +53,7 @@ def main(msg):
 if __name__ == "__main__":
     messages = [
         "https://russell.ballestrini.net for a good read",
-        "erbody dance https://www.youtube.com/watch?v=12VUjgYMm1U",
+        "erbody dance https://www.youtube.com/watch?v=LaTGrV58wec",
         "OUCH! https://russell.ballestrini.net/uploads/2012/06/dedication-eye-chemical-burn.jpg",
         "click the image to watch the video https://media.unturf.com/c/b02853d2-7976-11ec-934a-257a83652528/hook-blues-traveler-official-video",
     ]
