@@ -103,6 +103,7 @@ class Foxbot:
 
     def handle_message(self, message):
         """Process a message from the server."""
+        results = []
         if message.startswith("PING"):
             # Respond to server PINGs to keep the connection alive
             self.send(f"PONG {message.split()[1]}")
@@ -117,25 +118,29 @@ class Foxbot:
                 if msg.startswith("\x01ACTION") and msg.endswith("\x01"):
                     action_msg = msg[8:-1].strip()  # Extract the action message
                     loggit(f"Action from {user}: {action_msg}")
-                    plugin_name = action_msg.split()[0]
-                    result = self.plugin_manager.run_plugin(plugin_name, action_msg)
+                    plugin_name = action_msg.split()[0]  # The first word as plugin name
+                    results.append(
+                        self.plugin_manager.run_plugin(plugin_name, action_msg)
+                    )
                 else:
                     loggit(f"Message from {user}: {msg}")
 
                     # Detect URLs and run the urinfo plugin if a URL is found
-                    if "://" in msg:
-                        loggit(f"URI detected: {msg}")
-                        # Extract the first URL from the message
-                        url = msg.split()[
-                            0
-                        ]  # Modify this to get the URL correctly if needed
-                        result = self.plugin_manager.run_plugin("urinfo", url)
-                    else:
-                        plugin_name = msg.split()[0]
-                        result = self.plugin_manager.run_plugin(plugin_name, msg)
+                    urls = [word for word in msg.split() if "://" in word]
+                    if urls:
+                        for url in urls:
+                            loggit(f"URI detected: {url}")
+                            results.append(
+                                self.plugin_manager.run_plugin("urinfo", url).decode(
+                                    "utf-8"
+                                )
+                            )
+                    if msg.startswith(self.nickname):
+                        plugin_name = msg.split()[1]
+                        results.append(self.plugin_manager.run_plugin(plugin_name, msg))
 
-                if result:
-                    self.send(f"PRIVMSG {channel} :{result}")
+                if results:
+                    self.send(f"PRIVMSG {channel} :{''.join(results)}")
 
     def run(self):
         """Start the bot."""
