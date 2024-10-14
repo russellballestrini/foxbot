@@ -1,4 +1,4 @@
-foxbot the dynamic plugin IRC bot
+foxbot a dynamic plugin IRC bot
 #####################################
 
 .. contents::
@@ -17,7 +17,8 @@ Start the bot
 ================
 
 Note
- We suggest running foxbot in a gnu screen session
+ We suggest running foxbot in a gnu screen session or tmux.
+ Otherwise, you could build a service for it.
 
 help::
 
@@ -25,10 +26,9 @@ help::
 
 example::
 
- python foxbot.py --channel="#foxbot" --server="irc.freenode.net" --nick="fxbt"
+ python foxbot.py --channel="#foxbot" --server="irc.pieter.com" --nick="fxbt"
 
 Todo
 =================
 
-* write logic for passwords
 * document how to write plugins
