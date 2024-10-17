@@ -29,30 +29,48 @@ def uptime(targets):
     """Return the uptime for all targets"""
     output = []
     result = cmd_run_all(targets, "uptime")
-    for minion_id in result.keys():
-        output.append(minion_id + ": " + result[minion_id]["cmd.run_all"]["stdout"])
+    
+    for minion_id, minion_result in result.items():
+        # Check if the result is valid (not False)
+        if minion_result and isinstance(minion_result, dict) and "cmd.run_all" in minion_result:
+            output.append(f"{minion_id}: {minion_result['cmd.run_all']['stdout']}")
+        else:
+            output.append(f"{minion_id}: Command failed or minion unreachable")
+    
     return "\n".join(output)
 
 
 def procs(targets):
-    """Check procs. Return stdout targets considered in Warning or Critical"""
+    """Check procs. Return stdout for targets considered in Warning or Critical"""
     output = []
     result = cmd_run_all(targets, "/usr/lib/nagios/plugins/check_procs -w 150 -c 200")
-    for minion_id in result.keys():
-        if result[minion_id]["cmd.run_all"]["retcode"] != 0:
-            output.append(minion_id + ": " + result[minion_id]["cmd.run_all"]["stdout"])
+    
+    for minion_id, minion_result in result.items():
+        # Check if the result is valid (not False)
+        if minion_result and isinstance(minion_result, dict) and "cmd.run_all" in minion_result:
+            if minion_result["cmd.run_all"]["retcode"] != 0:
+                output.append(f"{minion_id}: {minion_result['cmd.run_all']['stdout']}")
+        else:
+            output.append(f"{minion_id}: Command failed or minion unreachable")
+    
     return "\n".join(output)
 
 
 def disks(targets):
-    """Check disk usage. Return stdout targets considered in Warning or Critical"""
+    """Check disk usage. Return stdout for targets considered in Warning or Critical"""
     output = []
     result = cmd_run_all(
         targets, '/usr/lib/nagios/plugins/check_disk -w 20% -c 10% -A -i ".gvfs"'
     )
-    for minion_id in result.keys():
-        if result[minion_id]["cmd.run_all"]["retcode"] != 0:
-            output.append(minion_id + ": " + result[minion_id]["cmd.run_all"]["stdout"])
+    
+    for minion_id, minion_result in result.items():
+        # Check if the result is valid (not False)
+        if minion_result and isinstance(minion_result, dict) and "cmd.run_all" in minion_result:
+            if minion_result["cmd.run_all"]["retcode"] != 0:
+                output.append(f"{minion_id}: {minion_result['cmd.run_all']['stdout']}")
+        else:
+            output.append(f"{minion_id}: Command failed or minion unreachable")
+    
     return "\n".join(output)
 
 

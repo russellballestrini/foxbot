@@ -119,9 +119,9 @@ class Foxbot:
                     action_msg = msg[8:-1].strip()  # Extract the action message
                     loggit(f"Action from {user}: {action_msg}")
                     plugin_name = action_msg.split()[0]  # The first word as plugin name
-                    results.append(
-                        self.plugin_manager.run_plugin(plugin_name, action_msg)
-                    )
+                    result = self.plugin_manager.run_plugin(plugin_name, action_msg)
+                    if result is not None:
+                        results.append(result)
                 else:
                     loggit(f"Message from {user}: {msg}")
 
@@ -130,15 +130,17 @@ class Foxbot:
                     if urls:
                         for url in urls:
                             loggit(f"URI detected: {url}")
-                            results.append(
-                                self.plugin_manager.run_plugin("urinfo", url).decode(
-                                    "utf-8"
-                                )
-                            )
+                            result = self.plugin_manager.run_plugin("urinfo", url)
+                            if result is not None:
+                                results.append(result.decode("utf-8"))
+
                     if msg.startswith(self.nickname):
                         plugin_name = msg.split()[1]
-                        results.append(self.plugin_manager.run_plugin(plugin_name, msg))
+                        result = self.plugin_manager.run_plugin(plugin_name, msg)
+                        if result is not None:
+                            results.append(result)
 
+                # Send results if there are any valid non-None results
                 if results:
                     self.send(f"PRIVMSG {channel} :{''.join(results)}")
 
