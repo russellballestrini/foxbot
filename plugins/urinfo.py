@@ -16,13 +16,11 @@ def fetch_content_info(url):
         if content_length is None:
             content_length = "Not provided"
 
-        if "text/html" in content_type:
-            soup = BeautifulSoup(response.text, "html.parser")
-            # Get title and decode it properly
-            title = soup.title.string.strip() if soup.title else "No title found"
-            return title, content_type, content_length
+        soup = BeautifulSoup(response.text, "html.parser")
+        # Get title and decode it properly
+        title = soup.title.string.strip() if soup.title else "No title found"
+        return title, content_type, content_length
 
-        return None, content_type, content_length
     except requests.RequestException as e:
         print(f"Error fetching {url}: {e}")
         return None, None, None
