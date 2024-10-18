@@ -135,10 +135,14 @@ class Foxbot:
                                 results.append(result.decode("utf-8"))
 
                     if msg.startswith(self.nickname):
-                        plugin_name = msg.split()[1]
-                        result = self.plugin_manager.run_plugin(plugin_name, msg)
-                        if result is not None:
-                            results.append(result)
+                        try:
+                            plugin_name = msg.split()[1]
+                        except KeyError:
+                            plugin_name = None
+                        if plugin_name:
+                            result = self.plugin_manager.run_plugin(plugin_name, msg)
+                            if result is not None:
+                                results.append(result)
 
                 # Send results if there are any valid non-None results
                 if results:
